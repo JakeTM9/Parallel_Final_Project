@@ -2,37 +2,43 @@ import sys
 import numba 
 import numpy as np
 from numba import cuda
-
-print("Python version:", sys.version)
-print("Numba version:", numba.__version__)
-print("Numpy version:", np.__version__)
+from numba.cuda.random import create_xoroshiro128p_states, xoroshiro128p_uniform_float32
 
 @cuda.jit
-def cudakernel0(array):
-    for i in range(array.size):
-        array[i] += 0.5
+def blackjack_kernel(wins_array, simulations_to_run, rng_states):
 
-array = np.array([0, 1], np.float32)
-print('Initial array:', array)
+    # TODO: something about gamestate data input
+    thread_position = cuda.threadIdx.x # probably make this a different call
+    wins = 0
 
-# the [1, 1] represent threadsize/blocksize. The set of arguments
-# can expanded in the kernel definition too.
-print('Kernel launch: cudakernel0[1, 1](array)')
-cudakernel0[1, 1](array)
+    for _ in range(simulations_to_run):
+        # this section will be the "core", real game logic will go here
 
-print('Updated array:',array)
+        # begin basic example:
+        # get random number from 0 to 1
+        random_float_0_to_1 = xoroshiro128p_uniform_float32(rng_states,
+                                                            thread_position)
+        if random_float_0_to_1 > .5:
+            wins += 1
+        # end basic example:
 
+    wins_array[thread_position] = wins
 
-array = np.array([0, 1], np.float32)
-print('Initial array:', array)
+# This function will eventually be removed, it's here for testing/reference
+def super_simple_example_runner():
+    threads_to_run = 10 # total threads/kernels, make this user-configurable
+    games_per_thread = 1000 # total simulations per thread, also configurable
 
-gridsize = 1024
-blocksize = 1024
-print("Grid size: {}, Block size: {}".format(gridsize, blocksize))
+    # intial state data needed for the RNG
+    rng_states = create_xoroshiro128p_states(threads_to_run, seed=777)
 
-print("Total number of threads:", gridsize * blocksize)
+    # all zeroes, the real point here is to allocate the entire array
+    wins_array = np.zeros(threads_to_run) 
 
-print('Kernel launch: cudakernel0[gridsize, blocksize](array)')
-cudakernel0[gridsize, blocksize](array)
+    # wins_array gets updated during execution
+    blackjack_kernel[1, 10](wins_array, games_per_thread, rng_states)
 
-print('Updated array:',array)
+    # print out array for reference
+    print(wins_array)
+
+super_simple_example_runner() # call runner, remove this in final product
