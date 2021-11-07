@@ -15,6 +15,8 @@ def cudakernel0(array):
 array = np.array([0, 1], np.float32)
 print('Initial array:', array)
 
+# the [1, 1] represent threadsize/blocksize. The set of arguments
+# can expanded in the kernel definition too.
 print('Kernel launch: cudakernel0[1, 1](array)')
 cudakernel0[1, 1](array)
 
