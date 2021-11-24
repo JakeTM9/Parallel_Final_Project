@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title style="color:red;">Blackjack Parallel Simulation</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  </head>
+  <body>
+    <div class="container" style = "text-align: center;">
+      <h1 >Blackjack Parallel Simulation</h2>
+      <form action="{{ url_for('result') }}" method="post">
+            <h2>Input number of threads to run:</h2>
+            <input type="text"  id="numThreads" name="numThreads">
+            <h2>Input your hand</h2>
+            <input type="text"  id="playerHand" name="playerHand">
+            <h2>Input the dealer's known cards</h2>
+            <input type="text"  id="dealerHand" name="dealerHand">
+            <br><br>
+            <input type="submit" value="Submit">
+            <p>Here is an example hand:</p> <h1>3d,ks,ac,qh</h1>
+            <p>This example hand is:</p>
+            <p>3 of Diamond</p>
+            <p>King of Spade</p>
+            <p>Ace of Club</p>
+            <p>Queen of Heart</p>
+            
+      </form>
+      
+    </div>
+  </body>
+</html> 
