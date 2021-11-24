@@ -1,15 +1,7 @@
 
-# Python Flask App Positive/Negative Sentiment Analysis
+# Python Flask App BlackJack Parallel Simulation
 
-This is a minimal Flask app that has the user input a user review and hit the submit button. The user is then redirected to a page that displays the review as well as the prediction.
-
-The app has a saved tensorflow model to make the prediction. The model uses [Twitter Airline Review Data](https://www.kaggle.com/crowdflower/twitter-airline-sentiment) to train.
-
-I followed [this guide](https://techvidvan.com/tutorials/python-sentiment-analysis/) to create the sentiment analysis model and [this guide](https://www.tensorflow.org/tutorials/keras/save_and_load) to save the model
-
-# To Re-Train the Model
-
-If you want to train the model using more epochs or a different way. Trainer.py is included and can be run. Be sure to delete "sentiment_analysis_model.h5" from the app directory in order to save the new model.
+This is a minimal Flask app that has the user input desired number of simulations, the players hand, and the dealers hand. The user is then redirected to a page that displays some relevant data as well as the results of the simulation.
 
 # Instructions
 
