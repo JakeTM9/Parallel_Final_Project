@@ -1,21 +1,21 @@
 <!DOCTYPE html>
-<html>
-  <head>
-    <title style="color:red;">Blackjack Parallel Simulation</title>
+<html style="background-image: url({{url_for('static', filename='blackjack_background.jpg')}});" xmlns:color="http://www.w3.org/1999/xhtml">
+  <head >
+    <title style="color:red;">Bla&cent;kjack Parallel &#36;imulation</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
   </head>
   <body>
-    <div class="container" style = "text-align: center;">
-      <h1 >Blackjack Parallel Simulation</h2>
+    <div class="container" style = "text-align: center; color: #fee87f; " >
+      <h1>Bla&cent;kjack Parallel &#36;imulation</h1>
       <form action="{{ url_for('result') }}" method="post">
             <h2>Input number of threads to run:</h2>
-            <input type="text"  id="numThreads" name="numThreads">
+            <input type="text"  id="numThreads" name="numThreads" style="border: 1px solid #ad534d;">
             <h2>Input your hand</h2>
-            <input type="text"  id="playerHand" name="playerHand">
+            <input type="text"  id="playerHand" name="playerHand" style="border: 1px solid #ad534d;">
             <h2>Input the dealer's known cards</h2>
-            <input type="text"  id="dealerHand" name="dealerHand">
+            <input type="text"  id="dealerHand" name="dealerHand" style="border: 1px solid #ad534d;">
             <br><br>
-            <input type="submit" value="Submit">
+            <input type="submit" value="Submit" style="background-color: #1f1e23; color: #fee87f; border: 1px solid #ad534d;">
             <p>Here is an example hand:</p> <h1>3d,ks,ac,qh</h1>
             <p>This example hand is:</p>
             <p>3 of Diamond</p>
