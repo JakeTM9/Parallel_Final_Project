@@ -5,13 +5,21 @@ from numba import cuda
 from numba.cuda.random import create_xoroshiro128p_states, xoroshiro128p_uniform_float32
 
 @cuda.jit
-def blackjack_kernel(wins_array, simulations_to_run, rng_states):
+def blackjack_kernel(wins_standing_array,
+                     wins_hitting_array,
+                     remaining_deck_array,
+                     player_hand_array,
+                     dealer_hand_array,
+                     simulations_to_run,
+                     rng_states):
 
     # TODO: something about gamestate data input
     thread_position = cuda.threadIdx.x # probably make this a different call
-    wins = 0
+    wins_standing_count = 0
+    wins_hitting_count = 0
 
     for _ in range(simulations_to_run):
+        c = numba.cuda.local.array(10, numba.uint8)
         # this section will be the "core", real game logic will go here
 
         # begin basic example:
@@ -19,10 +27,16 @@ def blackjack_kernel(wins_array, simulations_to_run, rng_states):
         random_float_0_to_1 = xoroshiro128p_uniform_float32(rng_states,
                                                             thread_position)
         if random_float_0_to_1 > .5:
-            wins += 1
+            wins_standing_count += 1
+
+        random_float_0_to_1 = xoroshiro128p_uniform_float32(rng_states,
+                                                            thread_position)
+        if random_float_0_to_1 > .5:
+            wins_hitting_count += 1
         # end basic example:
 
-    wins_array[thread_position] = wins
+    wins_standing_array[thread_position] = wins_standing_count
+    wins_hitting_array[thread_position] = wins_hitting_count
 
 
 def get_card_values_from_hand_str(hand):
@@ -141,30 +155,40 @@ def format_input_for_kernel(playerHand, dealerHand):
     # hitOnFirst = not sure if call on kernel launch
     return game_over, deck_without_hand_values, playerHandNormalized, dealerHandNormalized
 
-# This function will eventually be removed, it's here for testing/reference
 def core_handler(num_threads_to_run, games_per_thread, player_hand_str, dealer_hand_str):
-    """ Takes input directly from "routes", returns wins_array back """
-    isGameover, Deck, player_hand_str, dealer_hand_str = format_input_for_kernel(player_hand_str, dealer_hand_str)
-    
-    # intial state data needed for the RNG
-    rng_states = create_xoroshiro128p_states(num_threads_to_run, seed=777)
+    """ Takes input directly from "routes", returns win ratios back. Handles kernel execution. """
 
-    # all zeroes, the real point here is to allocate the entire array
-    wins_array = np.zeros(num_threads_to_run) 
+    # get data ready for kernel
+    game_over, remaining_deck_array, player_hand_array, dealer_hand_array = format_input_for_kernel(player_hand_str, dealer_hand_str)
 
-    # wins_array gets updated during execution
-    blackjack_kernel[1, num_threads_to_run](wins_array, games_per_thread, rng_states)
+    if game_over:
+        # TODO:do something else, no need to call kernel
 
-    ##NEW KERNEL ARGS?
-    #blackjack_kernel[1, threads_to_run](wins_array, games_per_thread, rng_states, isGameover, Deck, playerHand, dealerHand)
+        # These are made-up numbers, need to figure out if blackjack or bust
+        standing_winrate = 1
+        hitting_winrate = 0
+        pass
+    else:
+        # intial state data needed for the RNG
+        rng_states = create_xoroshiro128p_states(num_threads_to_run, seed=777)
 
-    # print out array for reference
-    return wins_array
+        # all zeroes, allocate arrays
+        wins_standing = np.zeros(num_threads_to_run)
+        wins_hitting = np.zeros(num_threads_to_run) 
 
-#playerHand = "as,5h,10s,kh"
-#dealerHand = "as,5h,10s,kh"         
-        
-#formatInputForBlackJack(playerHand,dealerHand) #TESTS FUNCTION
+        # execute kernel instances, both arrays will be updated
+        blackjack_kernel[1, num_threads_to_run](wins_standing,
+                                                wins_hitting,
+                                                remaining_deck_array,
+                                                player_hand_array,
+                                                dealer_hand_array,
+                                                games_per_thread,
+                                                rng_states)
 
+        standing_win_average = np.average(wins_standing)
+        hitting_win_average = np.average(wins_hitting)
 
-#super_simple_example_runner() # call runner, remove this in final product
+        standing_winrate = standing_win_average / games_per_thread
+        hitting_winrate = hitting_win_average / games_per_thread
+
+    return standing_winrate, hitting_winrate
