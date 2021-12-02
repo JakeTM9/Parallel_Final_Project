@@ -10,34 +10,105 @@ def blackjack_kernel(wins_standing_array,
                      remaining_deck_array,
                      player_hand_array,
                      dealer_hand_array,
+                     starting_player_sum,
+                     starting_dealer_sum,
                      simulations_to_run,
                      rng_states):
 
-    # TODO: something about gamestate data input
-    thread_position = cuda.threadIdx.x # probably make this a different call
+    def get_random_card_index(rng, thread_pos, card_count):
+        """ Big wrapper for "getting a random int" up to 1 less than card_count """
+        random_float = xoroshiro128p_uniform_float32(rng, thread_pos)
+        float_over_range = random_float * card_count - 0.5
+        new_index = round(float_over_range)
+        return new_index
+    
+    def card_is_unused(card_index, in_play_cards, num_in_play_cards):
+        """ Normally, you could do this with 1 line in python, but not in numba/cuda/jit """
+        found = False
+        for n in range(num_in_play_cards):
+            if int(in_play_cards[n]) == int(card_index):
+                found=True
+        return found
+    
+    def smart_add(current_sum, value_to_add):
+        return current_sum + value_to_add
+        sum = current_sum + value_to_add
+        if value_to_add == 11 and sum > 21:
+            sum -= 10
+
+        return sum
+
+    thread_position = cuda.threadIdx.x
+
     wins_standing_count = 0
     wins_hitting_count = 0
+    cards_left_in_deck = remaining_deck_array.size
 
+
+    # array representing card indeces that are in-play. We won't actually change
+    # the contents of any of the incoming deck numpy arrays, only reference them.
+    # That helps with thread synchronization issues.
+    in_play_cards_array = numba.cuda.local.array(10, numba.uint8)
+
+    # begin simulations
     for _ in range(simulations_to_run):
-        c = numba.cuda.local.array(10, numba.uint8)
-        # this section will be the "core", real game logic will go here
+        # flush deck (remove withdrawn cards), reset sums
+        num_cards_in_play = 0 # next index in in_play_cards. Would love to use a list instead....
+        for idx in range(10):
+            in_play_cards_array[idx] = 0
 
-        # begin basic example:
-        # get random number from 0 to 1
-        random_float_0_to_1 = xoroshiro128p_uniform_float32(rng_states,
-                                                            thread_position)
-        if random_float_0_to_1 > .5:
+        player_sum = starting_player_sum
+        dealer_sum = starting_dealer_sum
+
+        # dealer hits while < 17 in all cases
+        while dealer_sum < 17:
+            # NOTE: Something appears broken in here, it looks like there's an infinite loop. It's probably also
+            # in the same logic below
+            # get a random card
+            random_card_index = get_random_card_index(rng_states, thread_position, cards_left_in_deck)
+#            dealer_sum += random_card_index
+            if card_is_unused(random_card_index, in_play_cards_array, num_cards_in_play):
+                in_play_cards_array[num_cards_in_play] = random_card_index
+                num_cards_in_play += 1
+                dealer_sum = smart_add(dealer_sum, remaining_deck_array[random_card_index])
+                dealer_sum += 1
+
+        # check right now if dealer busted, if so, doesn't matter what player does
+        if dealer_sum > 21:
             wins_standing_count += 1
-
-        random_float_0_to_1 = xoroshiro128p_uniform_float32(rng_states,
-                                                            thread_position)
-        if random_float_0_to_1 > .5:
             wins_hitting_count += 1
-        # end basic example:
+
+        # --- Now we do different logic for both possibilities
+
+        # - Standing:
+        if player_sum > dealer_sum:
+            wins_standing_count += 1
+        elif player_sum == dealer_sum:
+            wins_standing_count += 0.5 # tie, half a win
+
+        # - Hitting:
+
+        # Get a random unused card, "hit" with it
+        found_an_unused_card_index = False
+        while not found_an_unused_card_index:
+            random_card_index = get_random_card_index(rng_states, thread_position, cards_left_in_deck)
+            if card_is_unused(random_card_index, in_play_cards_array, num_cards_in_play):
+                # don't need to adjust index or add to set of cards, this is the last card
+                found_an_unused_card_index = True
+                player_sum = smart_add(player_sum, remaining_deck_array[random_card_index])
+            found_an_unused_card_index = True
+
+        # won't increment anything if we busted
+        if player_sum == 21:
+            wins_hitting_count += 1
+        elif player_sum < 21:
+            if player_sum > dealer_sum:
+                wins_standing_count += 1
+            elif player_sum == dealer_sum:
+                wins_standing_count += 0.5 # tie, half a win
 
     wins_standing_array[thread_position] = wins_standing_count
     wins_hitting_array[thread_position] = wins_hitting_count
-
 
 def get_card_values_from_hand_str(hand):
     card_str_list = hand.split(",")
@@ -97,10 +168,6 @@ def formatInputForBlackJack (player_hand_string, dealer_hand_string):
     dealerTotal = get_total_from_value_list(dealer_hand_values_list)
     return player_hand_cards_list, player_hand_values_list, dealer_hand_cards_list, dealer_hand_values_list, playerTotal, dealerTotal
 
-## Checks if Player has busted or has 21
-def is_game_over(playerTotal):
-    return playerTotal >= 21
-
 def get_full_deck():
     """ returns an np array of all blackjack values in a deck, with aces as 11s """
     deck_value_list = list()
@@ -137,9 +204,6 @@ def normalizeHand(hand):
 def format_input_for_kernel(playerHand, dealerHand):
     player_hand_cards, player_hand_values, dealer_hand_cards, dealer_hand_values, playerTotal, dealerTotal = formatInputForBlackJack (playerHand, dealerHand)
 
-    ## Checks if Player has busted or has 21
-    game_over = is_game_over(playerTotal)
-
     ## Deck values without player values or dealer known values
     deck_without_hand_values = initializeDeck(player_hand_values, dealer_hand_values)
 
@@ -153,21 +217,20 @@ def format_input_for_kernel(playerHand, dealerHand):
     print(dealerHandNormalized, file=sys.stderr)
 
     # hitOnFirst = not sure if call on kernel launch
-    return game_over, deck_without_hand_values, playerHandNormalized, dealerHandNormalized
+    return playerTotal, dealerTotal, deck_without_hand_values, playerHandNormalized, dealerHandNormalized
 
 def core_handler(num_threads_to_run, games_per_thread, player_hand_str, dealer_hand_str):
     """ Takes input directly from "routes", returns win ratios back. Handles kernel execution. """
 
     # get data ready for kernel
-    game_over, remaining_deck_array, player_hand_array, dealer_hand_array = format_input_for_kernel(player_hand_str, dealer_hand_str)
+    player_total, dealer_total, remaining_deck_array, player_hand_array, dealer_hand_array = format_input_for_kernel(player_hand_str, dealer_hand_str)
 
-    if game_over:
-        # TODO:do something else, no need to call kernel
-
-        # These are made-up numbers, need to figure out if blackjack or bust
+    if player_total == 21 or dealer_total > 21: # player has blackjack or dealer busts
         standing_winrate = 1
+        hitting_winrate = 1
+    elif dealer_total == 21 or player_total > 21: # player bust or dealer has blackjack
+        standing_winrate = 0
         hitting_winrate = 0
-        pass
     else:
         # intial state data needed for the RNG
         rng_states = create_xoroshiro128p_states(num_threads_to_run, seed=777)
@@ -182,6 +245,8 @@ def core_handler(num_threads_to_run, games_per_thread, player_hand_str, dealer_h
                                                 remaining_deck_array,
                                                 player_hand_array,
                                                 dealer_hand_array,
+                                                player_total,
+                                                dealer_total,
                                                 games_per_thread,
                                                 rng_states)
 
