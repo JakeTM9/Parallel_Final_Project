@@ -84,12 +84,8 @@ def formatInputForBlackJack (player_hand_string, dealer_hand_string):
     return player_hand_cards_list, player_hand_values_list, dealer_hand_cards_list, dealer_hand_values_list, playerTotal, dealerTotal
 
 ## Checks if Player has busted or has 21
-def initializeIsGameOver(playerTotal):
-    if(playerTotal < 21):
-        isGameOver = False
-    else:
-        isGameOver = True
-    return isGameOver
+def is_game_over(playerTotal):
+    return playerTotal >= 21
 
 def get_full_deck():
     """ returns an np array of all blackjack values in a deck, with aces as 11s """
@@ -105,15 +101,6 @@ def get_full_deck():
         deck_value_list.append(10)
 
     deck = np.array(deck_value_list)
-    return deck
-
- ## Retunrs New Deck with changing size PROB NOT GONNA USE BUT ITS HERE
-def initializeDeckBad(player_hand_values, dealer_hand_values):
-    deck = get_full_deck()
-    for value in player_hand_values:
-        deck = np.delete(deck, np.where(deck==value)[0][0])
-    for value in dealer_hand_values:
-        deck = np.delete(deck, np.where(deck==value)[0][0])
     return deck
 
 ## Returns Deck with 0s where no card size 52
@@ -137,29 +124,28 @@ def format_input_for_kernel(playerHand, dealerHand):
     player_hand_cards, player_hand_values, dealer_hand_cards, dealer_hand_values, playerTotal, dealerTotal = formatInputForBlackJack (playerHand, dealerHand)
 
     ## Checks if Player has busted or has 21
-    isGameOver = initializeIsGameOver(playerTotal)
+    game_over = is_game_over(playerTotal)
+
     ## Deck values without player values or dealer known values
-    Deck = initializeDeck(player_hand_values, dealer_hand_values)
+    deck_without_hand_values = initializeDeck(player_hand_values, dealer_hand_values)
+
     ##player and dealer have a fixed array size of 12, cards are non-zero (unsure how handling dealer's uknown card so for now he is treated like a player)
     playerHandNormalized = normalizeHand(player_hand_values)
     dealerHandNormalized = normalizeHand(dealer_hand_values)
 
-    ##printing these in console so you can see (hit submit on input)
-    print(Deck, file=sys.stderr)
+    ## printing these in console so you can see (hit submit on input)
+    print(deck_without_hand_values, file=sys.stderr)
     print(playerHandNormalized, file=sys.stderr)
     print(dealerHandNormalized, file=sys.stderr)
 
-    #hitOnFirst = not sure if call on kernel launch
-    return isGameOver, Deck, playerHandNormalized, dealerHandNormalized
+    # hitOnFirst = not sure if call on kernel launch
+    return game_over, deck_without_hand_values, playerHandNormalized, dealerHandNormalized
 
 # This function will eventually be removed, it's here for testing/reference
-def super_simple_example_runner(num_threads_to_run, player_hand_str, dealer_hand_str):
+def core_handler(num_threads_to_run, games_per_thread, player_hand_str, dealer_hand_str):
     """ Takes input directly from "routes", returns wins_array back """
     isGameover, Deck, player_hand_str, dealer_hand_str = format_input_for_kernel(player_hand_str, dealer_hand_str)
     
-    #threads to run = total threads/kernels, make this user-configurable
-    games_per_thread = 1000 # total simulations per thread, also configurable
-
     # intial state data needed for the RNG
     rng_states = create_xoroshiro128p_states(num_threads_to_run, seed=777)
 

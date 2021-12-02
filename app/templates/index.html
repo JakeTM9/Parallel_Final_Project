@@ -10,10 +10,12 @@
       <form action="{{ url_for('result') }}" method="post">
             <h2>Input number of threads to run:</h2>
             <input type="text"  id="numThreads" name="numThreads" style="border: 1px solid #ad534d;">
+            <h2>Input games per thread to run:</h2>
+            <input type="text"  id="gamesPerThread" name="gamesPerThread" style="border: 1px solid #ad534d;">
             <h2>Input your hand</h2>
-            <input type="text"  id="playerHand" name="playerHand" style="border: 1px solid #ad534d;">
+            <input type="text"  id="playerHand" name="playerHand" style="border: 1px solid #ad534d;", placeholder="3d,ks">
             <h2>Input the dealer's known cards</h2>
-            <input type="text"  id="dealerHand" name="dealerHand" style="border: 1px solid #ad534d;">
+            <input type="text"  id="dealerHand" name="dealerHand" style="border: 1px solid #ad534d;", placeholder="2h,qs">
             <br><br>
             <input type="submit" value="Submit" style="background-color: #1f1e23; color: #fee87f; border: 1px solid #ad534d;">
             <p>Here is an example hand:</p> <h1>3d,ks,ac,qh</h1>

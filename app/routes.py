@@ -17,19 +17,23 @@ def home():
 @app.route("/result", methods=['GET', 'POST'])
 def result():
     num_threads_str = request.form.get('numThreads')
+    games_per_thread_str = request.form.get('gamesPerThread')
     player_hand_str = request.form.get('playerHand')
     dealer_hand_str = request.form.get('dealerHand')
 
-    num_threads = int(num_threads_str)
 
-    array = kernel.super_simple_example_runner(
-        num_threads, player_hand_str, dealer_hand_str)
+    num_threads = int(num_threads_str)
+    games_per_thread = int(games_per_thread_str)
+
+    results_array = kernel.core_handler(
+        num_threads, games_per_thread, player_hand_str, dealer_hand_str)
     player_hand_cards, player_hand_values, dealer_hand_cards, dealer_hand_values, player_total, dealer_total = kernel.formatInputForBlackJack(
         player_hand_str, dealer_hand_str)
 
     return render_template("result.html",
                            numThreads=num_threads_str,
-                           array=array,
+                           gamesPerThread=games_per_thread_str,
+                           array=results_array,
                            player_hand_cards=player_hand_cards,
                            player_hand_values=player_hand_values,
                            dealer_hand_cards=dealer_hand_cards,
