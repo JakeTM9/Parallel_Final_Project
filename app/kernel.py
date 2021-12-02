@@ -25,14 +25,17 @@ def blackjack_kernel(wins_array, simulations_to_run, rng_states):
     wins_array[thread_position] = wins
 
 
-def processHand(hand):
-    hand_list = hand.split(",")
+def get_card_values_from_hand_str(hand):
+    card_str_list = hand.split(",")
     value_list = []
-    for card in hand_list:
-        value_list.append(theDisgustingFunction(card))
-    return hand_list, value_list
+    for card in card_str_list:
+        value_list.append(card_str_to_value(card))
+    return card_str_list, value_list
 
-def theDisgustingFunction (card):
+def card_str_to_value (card):
+    """ Takes a human-readable card string and gets the underlying card value.
+        Ace is 11, Face cards are 10.
+    """
     if "a" in card:
         return 11
     elif "2" in card:
@@ -60,25 +63,25 @@ def theDisgustingFunction (card):
     elif "k" in card:
         return 10
 
-def getTotal(values):
+def get_total_from_value_list(value_list):
     total = 0
     numAces = 0
-    for value in values:
+    for value in value_list:
         total += value
         if value == 11:
             numAces += 1
-        if total > 21 and numAces > 0:
-            total -= 10
-            numAces -= 1
-    return total   
+    while total > 21 and numAces > 0:
+        total -= 10
+        numAces -= 1
+    return total
 
-##Called by Front end for
-def formatInputForBlackJack (playerHand, dealerHand): 
-    player_hand_cards, player_hand_values = processHand(playerHand)
-    dealer_hand_cards, dealer_hand_values = processHand(dealerHand)
-    playerTotal = getTotal(player_hand_values)
-    dealerTotal = getTotal(dealer_hand_values)
-    return player_hand_cards, player_hand_values, dealer_hand_cards, dealer_hand_values, playerTotal, dealerTotal
+## Called by Front end for
+def formatInputForBlackJack (player_hand_string, dealer_hand_string): 
+    player_hand_cards_list, player_hand_values_list = get_card_values_from_hand_str(player_hand_string)
+    dealer_hand_cards_list, dealer_hand_values_list = get_card_values_from_hand_str(dealer_hand_string)
+    playerTotal = get_total_from_value_list(player_hand_values_list)
+    dealerTotal = get_total_from_value_list(dealer_hand_values_list)
+    return player_hand_cards_list, player_hand_values_list, dealer_hand_cards_list, dealer_hand_values_list, playerTotal, dealerTotal
 
 ## Checks if Player has busted or has 21
 def initializeIsGameOver(playerTotal):
@@ -88,23 +91,39 @@ def initializeIsGameOver(playerTotal):
         isGameOver = True
     return isGameOver
 
+def get_full_deck():
+    """ returns an np array of all blackjack values in a deck, with aces as 11s """
+    deck_value_list = list()
+
+    # 2-11, includes one set of "10s" (the actual 10 cards) and one set of "11s" (aces)
+    for card_value in range(2, 12):
+        for _ in range(4):
+            deck_value_list.append(card_value)
+    
+    # the other face cards, of which there are 12 (4 of each)
+    for _ in range(12):
+        deck_value_list.append(10)
+
+    deck = np.array(deck_value_list)
+    return deck
+
  ## Retunrs New Deck with changing size PROB NOT GONNA USE BUT ITS HERE
 def initializeDeckBad(player_hand_values, dealer_hand_values):
-    Deck = np.array([11,11,11,11,2,2,2,2,3,3,3,3,4,4,4,4,5,5,5,5,6,6,6,6,7,7,7,7,8,8,8,8,9,9,9,9,10,10,10,10,10,10,10,10,10,10,10,10,10,10,10,10])
+    deck = get_full_deck()
     for value in player_hand_values:
-        Deck = np.delete(Deck, np.where(Deck==value)[0][0])
+        deck = np.delete(deck, np.where(deck==value)[0][0])
     for value in dealer_hand_values:
-        Deck = np.delete(Deck, np.where(Deck==value)[0][0])
-    return Deck
+        deck = np.delete(deck, np.where(deck==value)[0][0])
+    return deck
 
 ## Returns Deck with 0s where no card size 52
 def initializeDeck(player_hand_values, dealer_hand_values): 
-    Deck = np.array([11,11,11,11,2,2,2,2,3,3,3,3,4,4,4,4,5,5,5,5,6,6,6,6,7,7,7,7,8,8,8,8,9,9,9,9,10,10,10,10,10,10,10,10,10,10,10,10,10,10,10,10])
+    deck = get_full_deck()
     for value in player_hand_values:
-        Deck[np.where(Deck==value)[0][0]] = 0
+        deck[np.where(deck==value)[0][0]] = 0
     for value in dealer_hand_values:
-        Deck[np.where(Deck==value)[0][0]] = 0
-    return Deck
+        deck[np.where(deck==value)[0][0]] = 0
+    return deck
 
 ## Returns Hand with 0s where no card size 12 (not the best implementation but I was spending too much time on this)
 def normalizeHand(hand):
@@ -114,9 +133,9 @@ def normalizeHand(hand):
         hand = np.insert(hand,hand.size, 0)
     return hand
 
-def formatInputForKernel (playerHand, dealerHand):
+def format_input_for_kernel(playerHand, dealerHand):
     player_hand_cards, player_hand_values, dealer_hand_cards, dealer_hand_values, playerTotal, dealerTotal = formatInputForBlackJack (playerHand, dealerHand)
-    
+
     ## Checks if Player has busted or has 21
     isGameOver = initializeIsGameOver(playerTotal)
     ## Deck values without player values or dealer known values
@@ -132,22 +151,23 @@ def formatInputForKernel (playerHand, dealerHand):
 
     #hitOnFirst = not sure if call on kernel launch
     return isGameOver, Deck, playerHandNormalized, dealerHandNormalized
-# This function will eventually be removed, it's here for testing/reference
-def super_simple_example_runner(threads_to_run, playerHand, dealerHand):
 
-    isGameover, Deck, playerHand, dealerHand = formatInputForKernel(playerHand, dealerHand)
+# This function will eventually be removed, it's here for testing/reference
+def super_simple_example_runner(num_threads_to_run, player_hand_str, dealer_hand_str):
+    """ Takes input directly from "routes", returns wins_array back """
+    isGameover, Deck, player_hand_str, dealer_hand_str = format_input_for_kernel(player_hand_str, dealer_hand_str)
     
     #threads to run = total threads/kernels, make this user-configurable
     games_per_thread = 1000 # total simulations per thread, also configurable
 
     # intial state data needed for the RNG
-    rng_states = create_xoroshiro128p_states(threads_to_run, seed=777)
+    rng_states = create_xoroshiro128p_states(num_threads_to_run, seed=777)
 
     # all zeroes, the real point here is to allocate the entire array
-    wins_array = np.zeros(threads_to_run) 
+    wins_array = np.zeros(num_threads_to_run) 
 
     # wins_array gets updated during execution
-    blackjack_kernel[1, threads_to_run](wins_array, games_per_thread, rng_states)
+    blackjack_kernel[1, num_threads_to_run](wins_array, games_per_thread, rng_states)
 
     ##NEW KERNEL ARGS?
     #blackjack_kernel[1, threads_to_run](wins_array, games_per_thread, rng_states, isGameover, Deck, playerHand, dealerHand)
