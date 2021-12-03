@@ -2,7 +2,7 @@ import sys
 import numba 
 import numpy as np
 from numba import cuda
-from numba.cuda.random import create_xoroshiro128p_states, xoroshiro128p_uniform_float32
+from numba.cuda.random import create_xoroshiro128p_states, xoroshiro128p_uniform_float64
 
 @cuda.jit
 def blackjack_kernel(wins_standing_array,
@@ -17,19 +17,10 @@ def blackjack_kernel(wins_standing_array,
 
     def get_random_card_index(rng, thread_pos, card_count):
         """ Big wrapper for "getting a random int" up to 1 less than card_count """
-        random_float = xoroshiro128p_uniform_float32(rng, thread_pos)
-        float_over_range = random_float * card_count - 0.5
-        new_index = round(float_over_range)
-        return new_index
-    
-    def card_is_unused(card_index, in_play_cards, num_in_play_cards):
-        """ Normally, you could do this with 1 line in python, but not in numba/cuda/jit """
-        found = False
-        for n in range(num_in_play_cards):
-            if int(in_play_cards[n]) == int(card_index):
-                found=True
-        return found
-    
+        random_float = xoroshiro128p_uniform_float64(rng, thread_pos) # [0, 1) evenly distributed
+        random_int = int(card_count * random_float) # truncates
+        return random_int
+
     def smart_add(current_sum, value_to_add):
         return current_sum + value_to_add
         sum = current_sum + value_to_add
@@ -44,40 +35,32 @@ def blackjack_kernel(wins_standing_array,
     wins_hitting_count = 0
     cards_left_in_deck = remaining_deck_array.size
 
-
-    # array representing card indeces that are in-play. We won't actually change
-    # the contents of any of the incoming deck numpy arrays, only reference them.
-    # That helps with thread synchronization issues.
-    in_play_cards_array = numba.cuda.local.array(10, numba.uint8)
+    # array representing card indeces (in remaining_deck_array) that are in-play.
+    # Since this can't be dynamically allocated, just assigning 52
+    cards_in_play = numba.cuda.local.array(52, numba.types.boolean)
 
     # begin simulations
     for _ in range(simulations_to_run):
-        # flush deck (remove withdrawn cards), reset sums
-        num_cards_in_play = 0 # next index in in_play_cards. Would love to use a list instead....
-        for idx in range(10):
-            in_play_cards_array[idx] = 0
+        # flush deck (reset taken cards)
+        for idx in range(52):
+            cards_in_play[idx] = False
 
         player_sum = starting_player_sum
         dealer_sum = starting_dealer_sum
 
         # dealer hits while < 17 in all cases
         while dealer_sum < 17:
-            # NOTE: Something appears broken in here, it looks like there's an infinite loop. It's probably also
-            # in the same logic below
-            # get a random card
             random_card_index = get_random_card_index(rng_states, thread_position, cards_left_in_deck)
 #            dealer_sum += random_card_index
-            if card_is_unused(random_card_index, in_play_cards_array, num_cards_in_play):
-                in_play_cards_array[num_cards_in_play] = random_card_index
-                num_cards_in_play += 1
-                dealer_sum = smart_add(dealer_sum, remaining_deck_array[random_card_index])
-                dealer_sum += 1
+            if not cards_in_play[random_card_index]:
+                cards_in_play[random_card_index] = True
+                dealer_sum += remaining_deck_array[random_card_index]
 
         # check right now if dealer busted, if so, doesn't matter what player does
         if dealer_sum > 21:
             wins_standing_count += 1
             wins_hitting_count += 1
-
+            continue
         # --- Now we do different logic for both possibilities
 
         # - Standing:
@@ -92,11 +75,10 @@ def blackjack_kernel(wins_standing_array,
         found_an_unused_card_index = False
         while not found_an_unused_card_index:
             random_card_index = get_random_card_index(rng_states, thread_position, cards_left_in_deck)
-            if card_is_unused(random_card_index, in_play_cards_array, num_cards_in_play):
+            if not cards_in_play[random_card_index]:
                 # don't need to adjust index or add to set of cards, this is the last card
                 found_an_unused_card_index = True
-                player_sum = smart_add(player_sum, remaining_deck_array[random_card_index])
-            found_an_unused_card_index = True
+                player_sum += remaining_deck_array[random_card_index] #smart_add(player_sum, remaining_deck_array[random_card_index])
 
         # won't increment anything if we busted
         if player_sum == 21:
