@@ -22,7 +22,7 @@ def blackjack_kernel(wins_standing_array,
         return random_int
 
     def smart_add(current_sum, value_to_add):
-        return current_sum + value_to_add
+        #return current_sum + value_to_add
         sum = current_sum + value_to_add
         if value_to_add == 11 and sum > 21:
             sum -= 10
@@ -51,10 +51,9 @@ def blackjack_kernel(wins_standing_array,
         # dealer hits while < 17 in all cases
         while dealer_sum < 17:
             random_card_index = get_random_card_index(rng_states, thread_position, cards_left_in_deck)
-#            dealer_sum += random_card_index
             if not cards_in_play[random_card_index]:
                 cards_in_play[random_card_index] = True
-                dealer_sum += remaining_deck_array[random_card_index]
+                dealer_sum = smart_add(dealer_sum, remaining_deck_array[random_card_index])
 
         # check right now if dealer busted, if so, doesn't matter what player does
         if dealer_sum > 21:
@@ -78,16 +77,17 @@ def blackjack_kernel(wins_standing_array,
             if not cards_in_play[random_card_index]:
                 # don't need to adjust index or add to set of cards, this is the last card
                 found_an_unused_card_index = True
-                player_sum += remaining_deck_array[random_card_index] #smart_add(player_sum, remaining_deck_array[random_card_index])
+                player_sum = smart_add(player_sum, remaining_deck_array[random_card_index])
 
         # won't increment anything if we busted
         if player_sum == 21:
             wins_hitting_count += 1
+            # wins_hitting_count = -10000
         elif player_sum < 21:
             if player_sum > dealer_sum:
-                wins_standing_count += 1
+                wins_hitting_count += 1
             elif player_sum == dealer_sum:
-                wins_standing_count += 0.5 # tie, half a win
+                wins_hitting_count += 0.5 # tie, half a win
 
     wins_standing_array[thread_position] = wins_standing_count
     wins_hitting_array[thread_position] = wins_hitting_count
@@ -170,9 +170,9 @@ def get_full_deck():
 def initializeDeck(player_hand_values, dealer_hand_values): 
     deck = get_full_deck()
     for value in player_hand_values:
-        deck[np.where(deck==value)[0][0]] = 0
+        deck = np.delete(deck, np.where(deck==value)[0][0])
     for value in dealer_hand_values:
-        deck[np.where(deck==value)[0][0]] = 0
+        deck = np.delete(deck, np.where(deck==value)[0][0])
     return deck
 
 ## Returns Hand with 0s where no card size 12 (not the best implementation but I was spending too much time on this)
