@@ -55,21 +55,17 @@ def blackjack_kernel(wins_standing_array,
                 cards_in_play[random_card_index] = True
                 dealer_sum = smart_add(dealer_sum, remaining_deck_array[random_card_index])
 
-        # check right now if dealer busted, if so, doesn't matter what player does
-        if dealer_sum > 21:
-            wins_standing_count += 1
-            wins_hitting_count += 1
-            continue
-        # --- Now we do different logic for both possibilities
+        dealer_busted = dealer_sum > 21
 
-        # - Standing:
-        if player_sum > dealer_sum:
+        # - Standing (note that it's impossible for player to be busted here):
+        if dealer_busted:
             wins_standing_count += 1
-        elif player_sum == dealer_sum:
-            wins_standing_count += 0.5 # tie, half a win
+        elif player_sum > dealer_sum:
+            wins_standing_count += 1
+        elif player_sum == dealer_sum: # do not need to anything weird for blackjacks, tie is a tie
+            wins_standing_count += 0.5 # modeling as tie, half a win
 
         # - Hitting:
-
         # Get a random unused card, "hit" with it
         found_an_unused_card_index = False
         while not found_an_unused_card_index:
@@ -79,15 +75,18 @@ def blackjack_kernel(wins_standing_array,
                 found_an_unused_card_index = True
                 player_sum = smart_add(player_sum, remaining_deck_array[random_card_index])
 
-        # won't increment anything if we busted
-        if player_sum == 21:
+        player_busted = player_sum > 21
+
+        if player_busted: # even if dealer busts, player bust takes precedence, evaluated first
+            wins_hitting_count += 0
+        elif dealer_busted:
             wins_hitting_count += 1
-            # wins_hitting_count = -10000
-        elif player_sum < 21:
-            if player_sum > dealer_sum:
-                wins_hitting_count += 1
-            elif player_sum == dealer_sum:
-                wins_hitting_count += 0.5 # tie, half a win
+        elif player_sum > dealer_sum:
+            wins_hitting_count += 1
+        elif player_sum == dealer_sum:
+            wins_hitting_count += 0.5
+        elif player_sum < dealer_sum:
+            wins_hitting_count += 0
 
     wins_standing_array[thread_position] = wins_standing_count
     wins_hitting_array[thread_position] = wins_hitting_count
