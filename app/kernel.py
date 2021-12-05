@@ -10,8 +10,8 @@ from numba.cuda.random import create_xoroshiro128p_states, xoroshiro128p_uniform
 def blackjack_kernel(wins_standing_array,
                      wins_hitting_array,
                      remaining_deck_array,
-                     player_hand_array,
-                     dealer_hand_array,
+                     incoming_player_ace_count,
+                     incoming_dealer_ace_count,
                      starting_player_sum,
                      starting_dealer_sum,
                      simulations_to_run,
@@ -49,6 +49,8 @@ def blackjack_kernel(wins_standing_array,
 
         player_sum = starting_player_sum
         dealer_sum = starting_dealer_sum
+        player_ace_count = incoming_player_ace_count
+        dealer_ace_count = incoming_dealer_ace_count
 
         # dealer hits while < 17 in all cases
         while dealer_sum < 17:
@@ -132,24 +134,27 @@ def card_str_to_value (card):
         return 10
 
 def get_total_from_value_list(value_list):
+    """Returns the total value and number of aces""" 
     total = 0
-    numAces = 0
+    total_aces = 0
     for value in value_list:
         total += value
         if value == 11:
-            numAces += 1
-    while total > 21 and numAces > 0:
+            total_aces += 1
+
+    unprocessed_aces = total_aces
+    while total > 21 and unprocessed_aces > 0:
         total -= 10
-        numAces -= 1
-    return total
+        unprocessed_aces -= 1
+    return total, total_aces
 
 ## Called by Front end for
 def formatInputForBlackJack (player_hand_string, dealer_hand_string): 
     player_hand_cards_list, player_hand_values_list = get_card_values_from_hand_str(player_hand_string)
     dealer_hand_cards_list, dealer_hand_values_list = get_card_values_from_hand_str(dealer_hand_string)
-    playerTotal = get_total_from_value_list(player_hand_values_list)
-    dealerTotal = get_total_from_value_list(dealer_hand_values_list)
-    return player_hand_cards_list, player_hand_values_list, dealer_hand_cards_list, dealer_hand_values_list, playerTotal, dealerTotal
+    player_total, player_aces = get_total_from_value_list(player_hand_values_list)
+    dealer_total, dealer_aces = get_total_from_value_list(dealer_hand_values_list)
+    return player_hand_values_list, dealer_hand_values_list, player_total, dealer_total, player_aces, dealer_aces
 
 def get_full_deck():
     """ returns an np array of all blackjack values in a deck, with aces as 11s """
@@ -176,37 +181,29 @@ def initializeDeck(player_hand_values, dealer_hand_values):
         deck = np.delete(deck, np.where(deck==value)[0][0])
     return deck
 
-## Returns Hand with 0s where no card size 12 (not the best implementation but I was spending too much time on this)
-def normalizeHand(hand):
-    hand = np.array(hand)
-    zerosToAdd = 12 - hand.size
-    for i in range(0,zerosToAdd):
-        hand = np.insert(hand,hand.size, 0)
-    return hand
-
 def format_input_for_kernel(playerHand, dealerHand):
-    player_hand_cards, player_hand_values, dealer_hand_cards, dealer_hand_values, playerTotal, dealerTotal = formatInputForBlackJack (playerHand, dealerHand)
+    player_hand_values, dealer_hand_values, player_total, dealer_total, player_aces, dealer_aces = formatInputForBlackJack(playerHand, dealerHand)
 
     ## Deck values without player values or dealer known values
     deck_without_hand_values = initializeDeck(player_hand_values, dealer_hand_values)
 
     ##player and dealer have a fixed array size of 12, cards are non-zero (unsure how handling dealer's uknown card so for now he is treated like a player)
-    playerHandNormalized = normalizeHand(player_hand_values)
-    dealerHandNormalized = normalizeHand(dealer_hand_values)
 
     ## printing these in console so you can see (hit submit on input)
-    print(deck_without_hand_values, file=sys.stderr)
-    print(playerHandNormalized, file=sys.stderr)
-    print(dealerHandNormalized, file=sys.stderr)
+    print("Main Deck: {}".format(deck_without_hand_values), file=sys.stderr)
+    print("Player deck values: {}".format(player_hand_values), file=sys.stderr)
+    print("Dealer deck values: {}".format(dealer_hand_values), file=sys.stderr)
+    print("Player aces: {}".format(player_aces), file=sys.stderr)
+    print("Dealer aces: {}".format(dealer_aces), file=sys.stderr)
 
     # hitOnFirst = not sure if call on kernel launch
-    return playerTotal, dealerTotal, deck_without_hand_values, playerHandNormalized, dealerHandNormalized
+    return player_total, dealer_total, deck_without_hand_values, player_aces, dealer_aces
 
 def core_handler(num_threads_to_run, games_per_thread, player_hand_str, dealer_hand_str):
     """ Takes input directly from "routes", returns win ratios and exec time (as an str) back. Handles kernel execution. """
 
     # get data ready for kernel
-    player_total, dealer_total, remaining_deck_array, player_hand_array, dealer_hand_array = format_input_for_kernel(player_hand_str, dealer_hand_str)
+    player_total, dealer_total, remaining_deck_array, player_aces, dealer_aces = format_input_for_kernel(player_hand_str, dealer_hand_str)
     time_taken_output_str = "N/A"
     if player_total == 21 or dealer_total > 21: # player has blackjack or dealer busts
         standing_winrate = 1
@@ -227,8 +224,8 @@ def core_handler(num_threads_to_run, games_per_thread, player_hand_str, dealer_h
         blackjack_kernel[1, num_threads_to_run](wins_standing,
                                                 wins_hitting,
                                                 remaining_deck_array,
-                                                player_hand_array,
-                                                dealer_hand_array,
+                                                player_aces,
+                                                dealer_aces,
                                                 player_total,
                                                 dealer_total,
                                                 games_per_thread,
