@@ -36,7 +36,9 @@ def result():
     player_hand_cards, player_hand_values, dealer_hand_cards, dealer_hand_values, player_total, dealer_total = kernel.formatInputForBlackJack(
         player_hand_str, dealer_hand_str)
 
-    if standing_winrate > hitting_winrate:
+    if time_taken_str == "N/A": # no sims run
+        recomendation_str = "N/A"
+    elif standing_winrate > hitting_winrate:
         recomendation_str = "Stand."
     else:
         recomendation_str = "Hit!"
