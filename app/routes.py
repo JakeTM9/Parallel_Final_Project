@@ -24,21 +24,35 @@ def result():
 
     num_threads = int(num_threads_str)
     games_per_thread = int(games_per_thread_str)
+    total_sims = num_threads * games_per_thread
 
-    standing_winrate, hitting_winrate = kernel.core_handler(
+    # reformat output strings with commas
+    total_sims_str = f"{total_sims:,d}"
+    num_threads_str = f"{num_threads:,d}"
+    games_per_thread_str = f"{games_per_thread:,d}"
+
+    standing_winrate, hitting_winrate, time_taken_str = kernel.core_handler(
         num_threads, games_per_thread, player_hand_str, dealer_hand_str)
     player_hand_cards, player_hand_values, dealer_hand_cards, dealer_hand_values, player_total, dealer_total = kernel.formatInputForBlackJack(
         player_hand_str, dealer_hand_str)
 
+    if standing_winrate > hitting_winrate:
+        recomendation_str = "Stand."
+    else:
+        recomendation_str = "Hit!"
+
     return render_template("result.html",
+                           totalSims=total_sims_str,
                            numThreads=num_threads_str,
                            gamesPerThread=games_per_thread_str,
-                           standingWinRatio = standing_winrate,
-                           hittingWinRatio = hitting_winrate,
+                           standingWinRatio=standing_winrate,
+                           hittingWinRatio=hitting_winrate,
+                           recomendationStr=recomendation_str,
                            player_hand_cards=player_hand_cards,
                            player_hand_values=player_hand_values,
                            dealer_hand_cards=dealer_hand_cards,
                            dealer_hand_values=dealer_hand_values,
                            playerTotal=player_total,
                            dealerTotal=dealer_total,
+                           timeTaken=time_taken_str,
                            )

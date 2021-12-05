@@ -1,6 +1,8 @@
-import sys
 import numba 
 import numpy as np
+import sys
+import time
+
 from numba import cuda
 from numba.cuda.random import create_xoroshiro128p_states, xoroshiro128p_uniform_float64
 
@@ -201,11 +203,11 @@ def format_input_for_kernel(playerHand, dealerHand):
     return playerTotal, dealerTotal, deck_without_hand_values, playerHandNormalized, dealerHandNormalized
 
 def core_handler(num_threads_to_run, games_per_thread, player_hand_str, dealer_hand_str):
-    """ Takes input directly from "routes", returns win ratios back. Handles kernel execution. """
+    """ Takes input directly from "routes", returns win ratios and exec time (as an str) back. Handles kernel execution. """
 
     # get data ready for kernel
     player_total, dealer_total, remaining_deck_array, player_hand_array, dealer_hand_array = format_input_for_kernel(player_hand_str, dealer_hand_str)
-
+    time_taken_output_str = "N/A"
     if player_total == 21 or dealer_total > 21: # player has blackjack or dealer busts
         standing_winrate = 1
         hitting_winrate = 1
@@ -221,6 +223,7 @@ def core_handler(num_threads_to_run, games_per_thread, player_hand_str, dealer_h
         wins_hitting = np.zeros(num_threads_to_run) 
 
         # execute kernel instances, both arrays will be updated
+        start_time = time.time()
         blackjack_kernel[1, num_threads_to_run](wins_standing,
                                                 wins_hitting,
                                                 remaining_deck_array,
@@ -230,11 +233,13 @@ def core_handler(num_threads_to_run, games_per_thread, player_hand_str, dealer_h
                                                 dealer_total,
                                                 games_per_thread,
                                                 rng_states)
-
+        end_time = time.time()
+        total_time = end_time - start_time
+        time_taken_output_str = "{} seconds".format(total_time)
         standing_win_average = np.average(wins_standing)
         hitting_win_average = np.average(wins_hitting)
 
         standing_winrate = standing_win_average / games_per_thread
         hitting_winrate = hitting_win_average / games_per_thread
 
-    return standing_winrate, hitting_winrate
+    return standing_winrate, hitting_winrate, time_taken_output_str
