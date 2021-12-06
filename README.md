@@ -1,4 +1,4 @@
-
+   a
 # Python Flask App BlackJack Parallel Simulation
 
 This is a minimal Flask app that has the user input desired number of simulations, the players hand, and the dealers hand. The user is then redirected to a page that displays some relevant data as well as the results of the simulation.
